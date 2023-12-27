@@ -3,61 +3,15 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
 const createUser = async (req, res) => {
-  const {
-    firstName,
-    lastName,
-    email,
-    number,
-    password,
-    currentAddress,
-    confirmPassword,
-  } = req.body;
-
   console.log(req.body);
 
+  const { fullName, email, number, password, currentAddress } = req.body;
+
   // validation for all the fields
-  if (
-    (!firstName && !lastName && !email,
-    !number && !password && !confirmPassword && !currentAddress)
-  ) {
+  if ((!fullName && !email, !number && !password && !currentAddress)) {
     return res.json({
       success: false,
       message: "Please fill all the details",
-    });
-  } else if (!firstName) {
-    return res.json({
-      success: false,
-      message: "Firstname cannot be empty",
-    });
-  } else if (!lastName) {
-    return res.json({
-      success: false,
-      message: "Lastname cannot be empty",
-    });
-  } else if (!email) {
-    return res.json({
-      success: false,
-      message: "Email cannot be empty",
-    });
-  } else if (!number) {
-    return res.json({
-      success: false,
-      message: "Number cannot be empty",
-    });
-  } else if (!currentAddress) {
-    return res.json({
-      success: false,
-      message: "Address cannot be empty",
-    });
-  } else if (!password) {22
-    return res.json({
-      success: false,
-      message: "Password cannot be empty",
-    });
-  } else if (password != confirmPassword) {
-    return res.json({
-      success: false,
-      message: "Password donot match",
     });
   }
   try {
@@ -68,12 +22,12 @@ const createUser = async (req, res) => {
         message: "User Already Exists",
       });
     }
+
     const generateSalt = await bcrypt.genSalt(10);
     const passwordEncrypted = await bcrypt.hash(password, generateSalt);
 
     const newUser = new User({
-      firstName: firstName,
-      lastName: lastName,
+      fullName: fullName,
       email: email,
       number: number,
       currentAddress: currentAddress,
@@ -140,3 +94,35 @@ module.exports = {
   createUser,
   loginUser,
 };
+
+// else if (!fullName) {
+//   return res.json({
+//     success: false,
+//     message: "fullName cannot be empty",
+//   });
+// }else if (!email) {
+//   return res.json({
+//     success: false,
+//     message: "Email cannot be empty",
+//   });
+// } else if (!number) {
+//   return res.json({
+//     success: false,
+//     message: "Number cannot be empty",
+//   });
+// } else if (!currentAddress) {
+//   return res.json({
+//     success: false,
+//     message: "Address cannot be empty",
+//   });
+// } else if (!password) {22
+//   return res.json({
+//     success: false,
+//     message: "Password cannot be empty",
+//   });
+// } else if (password != confirmPassword) {
+//   return res.json({
+//     success: false,
+//     message: "Password donot match",
+//   });
+// }
