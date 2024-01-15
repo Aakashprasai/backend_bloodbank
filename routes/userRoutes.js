@@ -9,4 +9,12 @@ router.post("/register", userController.createUser);
 
 router.post("/login", userController.loginUser);
 
+router.put("/beadonor/:id", userController.beAdonor);
+
+router.get("/getAllUsers", userController.getAllUsers);
+
+router.get("/single_user/:id", userController.getSingleUser);
+
+router.put("/updateUser/:id", userController.updateUser);
+
 module.exports = router;
