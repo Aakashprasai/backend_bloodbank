@@ -12,6 +12,16 @@ const bloodBankSchema = mongoose.Schema(
       type: String,
     },
 
+    municipality: {
+      required: true,
+      type: String,
+    },
+
+    wardNo: {
+      required: true,
+      type: Number,
+    },
+
     bbContact: {
       required: true,
       type: Number,
@@ -59,6 +69,16 @@ const bloodBankSchema = mongoose.Schema(
       type: String,
       required: true,
       trim: true, // cuts space and stores in the db
+    },
+    
+    contactEmail : {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    isVerified: {
+      type: Boolean,
+      default: false,
     },
 
   },

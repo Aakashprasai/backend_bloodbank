@@ -4,6 +4,8 @@ const jwt = require("jsonwebtoken");
 const cloudinary = require("cloudinary");
 const nodemailer = require("nodemailer");
 const RequestBlood = require("../../model/RequestBloodModel");
+const { sendEmailController } = require("../sendEmailController");
+const user = require("../../model/userModel");
 const sendEmail = async (to, subject, text) => {
   let transporter = nodemailer.createTransport({
     service: "gmail",
@@ -22,10 +24,63 @@ const sendEmail = async (to, subject, text) => {
   });
 };
 
-const createUser = async (req, res) => {
-  console.log(req.body);
+const sendVerification = async (req, res) => {
+  const otp = Math.floor(1000 + Math.random() * 9000);
+  const { email } = req.body;
+
+  const isAUser = await User.findOne({ email: email });
+  if (isAUser) {
+    return res.json({
+      success: false,
+      message: "User already exists.",
+    });
+  }
+
+  if (!email || !email.includes("@")) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid email address. Please provide a valid email.",
+    });
+  }
   try {
-    const { fullName, email, number, password, currentAddress } = req.body;
+    const emailSent = await sendEmailController(
+      email,
+      "Welcome to BloodBank",
+      `Your verification code is: ${otp}`
+    );
+
+    if (emailSent) {
+      res.status(200).json({
+        success: true,
+        message: "Otp has been Sent to your email.",
+        otp: otp,
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message:
+          "Failed to send email. Please check the recipient's email address.",
+      });
+    }
+  } catch (error) {
+    console.error("Error handling /send-verification route:", error);
+
+    let errorMessage = "Server error.";
+    if (error.message.includes("No recipients defined")) {
+      errorMessage =
+        "Invalid email address. Please check the recipient's email address.";
+    }
+
+    res.status(500).json({
+      success: false,
+      message: errorMessage,
+    });
+  }
+};
+
+const createUser = async (req, res) => {
+  try {
+    const { fullName, email, number, password, currentAddress, otp, municipality, wardNo } = req.body;
     // Check if req.files and req.files.bbImage exist
     // if (!req.files || !req.files.bbImage) {
     //   return res.json({
@@ -34,6 +89,8 @@ const createUser = async (req, res) => {
     //   });
     // }
     const { userImage } = req.files;
+    const { userVerificationCode } = req.body;
+
     if (userImage) {
       // Validate image size
       if (userImage.size > 10485760) {
@@ -42,7 +99,7 @@ const createUser = async (req, res) => {
           message: "Image size too large. Maximum is 10 MB.",
         });
       }
-      if ((!fullName && !email, !number && !password && !currentAddress)) {
+      if ((!fullName && !email, !number && !password && !currentAddress && !municipality && !wardNo)) {
         return res.json({
           success: false,
           message: "Please fill all the details",
@@ -73,16 +130,24 @@ const createUser = async (req, res) => {
         email: email,
         number: number,
         currentAddress: currentAddress,
+        municipality: municipality,
+        wardNo: wardNo,
         password: passwordEncrypted,
         userImageURL: uploadedImage.secure_url,
       });
+      if (userVerificationCode == otp) {
+        await newUser.save();
 
-      await newUser.save();
-
-      return res.status(201).json({
-        success: true,
-        message: "Your account has been created with Image",
-      });
+        return res.status(201).json({
+          success: true,
+          message: "Your account has been created",
+        });
+      } else {
+        return res.json({
+          success: false,
+          message: "Verification code did not match",
+        });
+      }
     } else {
       const userExists = await User.findOne({ email: email });
       if (userExists) {
@@ -100,15 +165,26 @@ const createUser = async (req, res) => {
         email: email,
         number: number,
         currentAddress: currentAddress,
+        municipality: municipality,
+        wardNo: wardNo,
         password: passwordEncrypted,
       });
 
-      await newUser.save();
+      const { userVerificationCode } = req.body;
 
-      return res.status(201).json({
-        success: true,
-        message: "Your account has been created without Image",
-      });
+      if (userVerificationCode == otp) {
+        await newUser.save();
+
+        return res.status(201).json({
+          success: true,
+          message: "Your account has been created",
+        });
+      } else {
+        return res.json({
+          success: false,
+          message: "Verification code did not match",
+        });
+      }
     }
   } catch (e) {
     console.log(e);
@@ -148,7 +224,11 @@ const loginUser = async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: findUser._id, isAdmin: findUser.isAdmin },
+      {
+        id: findUser._id,
+        isAdmin: findUser.isAdmin,
+        isBloodBank: findUser.isBloodBank,
+      },
       process.env.JWT_TOKEN_SECRET
     );
 
@@ -221,10 +301,21 @@ const beAdonor = async (req, res) => {
 //  fetching all the users
 const getAllUsers = async (req, res) => {
   try {
-    const userList = await User.find();
+    const userList = await User.find({
+      $and: [{ isAdmin: false }, { isBloodBank: false }],
+    }).sort({ createdAt: -1 });
+    const userListForBloodBank = await User.find({
+      $and: [
+        { isAdmin: false },
+        { isADonor: true },
+        { isBloodBank: false },
+      ],
+    }).sort({ createdAt: -1 });
+
     res.json({
       success: true,
       users: userList,
+      userListForBloodBank: userListForBloodBank,
       message: "Success",
     });
   } catch (error) {
@@ -271,9 +362,9 @@ const updateUser = async (req, res) => {
       );
 
       if (user.isADonor == false) {
-        const { fullName, email, number, currentAddress } = req.body;
+        const { fullName, email, number, currentAddress,municipality, wardNo } = req.body;
 
-        if (!fullName || !email || !number || !currentAddress) {
+        if (!fullName || !email || !number || !currentAddress || !municipality || !wardNo) {
           return res.json({
             success: false,
             message: "Please Enter all the fields",
@@ -284,6 +375,8 @@ const updateUser = async (req, res) => {
           email: email,
           number: number,
           currentAddress: currentAddress,
+          municipality: municipality,
+          wardNo: wardNo,
           userImageURL: uploadedImage.secure_url,
         };
         await User.findByIdAndUpdate(id, updatedUser);
@@ -299,6 +392,8 @@ const updateUser = async (req, res) => {
           email,
           number,
           currentAddress,
+          municipality,
+          wardNo,
           gender,
           dob,
           isAvailable,
@@ -311,6 +406,8 @@ const updateUser = async (req, res) => {
           !email ||
           !number ||
           !currentAddress ||
+          !municipality ||
+          !wardNo ||
           !fullName ||
           !gender ||
           !dob ||
@@ -328,6 +425,8 @@ const updateUser = async (req, res) => {
           email: email,
           number: number,
           currentAddress: currentAddress,
+          municipality: municipality,
+          wardNo: wardNo,
           gender: gender,
           dob: dob,
           bloodGroup: bloodGroup,
@@ -359,6 +458,8 @@ const updateUser = async (req, res) => {
           email: email,
           number: number,
           currentAddress: currentAddress,
+          municipality: municipality,
+          wardNo: wardNo,
         };
         await User.findByIdAndUpdate(id, updatedUser);
 
@@ -373,6 +474,8 @@ const updateUser = async (req, res) => {
           email,
           number,
           currentAddress,
+          municipality,
+          wardNo,
           gender,
           dob,
           isAvailable,
@@ -385,6 +488,8 @@ const updateUser = async (req, res) => {
           !email ||
           !number ||
           !currentAddress ||
+          !municipality ||
+          !wardNo ||
           !fullName ||
           !gender ||
           !dob ||
@@ -402,6 +507,8 @@ const updateUser = async (req, res) => {
           email: email,
           number: number,
           currentAddress: currentAddress,
+          municipality: municipality,
+          wardNo: wardNo,
           gender: gender,
           dob: dob,
           bloodGroup: bloodGroup,
@@ -435,9 +542,9 @@ const updateUserWithoutImage = async (req, res) => {
     console.log(req.body);
 
     if (user.isADonor == false) {
-      const { fullName, email, number, currentAddress } = req.body;
+      const { fullName, email, number, currentAddress,municipality, wardNo } = req.body;
 
-      if (!fullName || !email || !number || !currentAddress) {
+      if (!fullName || !email || !number || !currentAddress || !municipality || !wardNo) {
         return res.status(404).json({
           success: false,
           message: "Please Enter all the fields",
@@ -448,6 +555,8 @@ const updateUserWithoutImage = async (req, res) => {
         email: email,
         number: number,
         currentAddress: currentAddress,
+        municipality: municipality,
+        wardNo: wardNo,
       };
       await User.findByIdAndUpdate(id, updatedUser);
 
@@ -462,6 +571,8 @@ const updateUserWithoutImage = async (req, res) => {
         email,
         number,
         currentAddress,
+        municipality,
+        wardNo,
         gender,
         dob,
         isAvailable,
@@ -474,6 +585,8 @@ const updateUserWithoutImage = async (req, res) => {
         !email ||
         !number ||
         !currentAddress ||
+        !municipality ||
+        !wardNo ||
         !fullName ||
         !gender ||
         !dob ||
@@ -491,6 +604,8 @@ const updateUserWithoutImage = async (req, res) => {
         email: email,
         number: number,
         currentAddress: currentAddress,
+        municipality: municipality,
+        wardNo: wardNo,
         gender: gender,
         dob: dob,
         bloodGroup: bloodGroup,
@@ -555,14 +670,20 @@ const forgetPassword = async (req, res) => {
 const searchUsers = async (req, res) => {
   try {
     const { district, bloodGroup } = req.query;
-    const query = {};
+    let query = {};
     if (district) {
       query.currentAddress = { $regex: district, $options: "i" };
     }
     if (bloodGroup) {
-      query.bloodGroup = bloodGroup;
+      query.bloodGroup = new RegExp(
+        "^" + bloodGroup.replace("+", "\\+").replace("-", "\\-") + "?"
+      );
     }
-    const users = await User.find(query);
+    const users = await User.find({
+      $and: [query, { isADonor: true }],
+    });
+    console.log(users);
+
     res.json({
       success: true,
       users: users,
@@ -618,4 +739,5 @@ module.exports = {
   forgetPassword,
   searchUsers,
   getRequestsByUserId,
+  sendVerification,
 };

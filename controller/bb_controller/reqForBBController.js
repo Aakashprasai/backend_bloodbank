@@ -1,6 +1,6 @@
-const Request = require("../../model/RequestBloodModel");
+const RequestForBB = require("../../model/requestForBBModel");
 
-const addRequests = async (req, res) => {
+const addRequestsBB = async (req, res) => {
   const {
     userId,
     patientName,
@@ -21,9 +21,10 @@ const addRequests = async (req, res) => {
     contactPerson,
     latitude,
     longitude,
+    bloodbank,
   } = req.body;
 
-  // console.log(req.body);
+  console.log(req.body);
 
   if (
     !userId ||
@@ -39,16 +40,17 @@ const addRequests = async (req, res) => {
     !date ||
     !contactPerson ||
     !latitude ||
-    !longitude
+    !longitude ||
+    !bloodbank
   ) {
     return res.json({
       success: false,
-      message: "Please Enter all fields ",
+      message: "Please Enter all fields",
     });
   }
 
   try {
-    const newRequest = new Request({
+    const newRequest = new RequestForBB({
       patientName: patientName,
       patientAge: patientAge,
       patientBloodType: patientBloodType,
@@ -68,6 +70,7 @@ const addRequests = async (req, res) => {
       userId: userId,
       latitude: latitude,
       longitude: longitude,
+      bloodbank: bloodbank,
     });
     await newRequest.save();
     res.status(200).json({
@@ -82,48 +85,22 @@ const addRequests = async (req, res) => {
   }
 };
 
-const getAllRequest = async (req, res) => {
+const getAllRequestBB = async (req, res) => {
   try {
-    const requestList = await Request.find({showRequest : true}).sort({ createdAt: -1 }).populate("userId","fullName");
-    const limitedRequestList = requestList.slice(0, 5);
-    const categorizedData = {
-      critical: [],
-      urgent: [],
-      normal: [],
-    };
-
-    requestList.forEach((request) => {
-      switch (request.urgency) {
-        case "Critical":
-          if (categorizedData.critical.length < 5) {
-            categorizedData.critical.push(request);
-          }
-          break;
-        case "Urgent":
-          if (categorizedData.urgent.length < 5) {
-            categorizedData.urgent.push(request);
-          }
-          break;
-        case "Normal":
-          if (categorizedData.normal.length < 5) {
-            categorizedData.normal.push(request);
-          }
-          break;
-      }
-    });
+    const requestList = await RequestForBB.find()
+      .sort({ createdAt: -1 })
+      .populate("userId");
 
     res.status(200).json({
       success: true,
-      categorizedData: categorizedData,
       requestList: requestList,
-      requestLists: limitedRequestList,
     });
   } catch (error) {
     res.status(400).json({ success: false, error: error });
   }
 };
 
-const updateRequest = async (req, res) => {
+const updateRequestBB = async (req, res) => {
   const {
     patientName,
     patientAge,
@@ -190,7 +167,7 @@ const updateRequest = async (req, res) => {
       latitude: latitude,
       longitude: longitude,
     };
-    await Request.findByIdAndUpdate(id, updatedRequest);
+    await RequestForBB.findByIdAndUpdate(id, updatedRequest);
     res.json({
       success: true,
       message: "Request Updated Successfully",
@@ -205,9 +182,9 @@ const updateRequest = async (req, res) => {
   }
 };
 
-const deleteRequest = async (req, res) => {
+const deleteRequestBB = async (req, res) => {
   try {
-    const deletedRequest = await Request.findByIdAndDelete(req.params.id);
+    const deletedRequest = await RequestForBB.findByIdAndDelete(req.params.id);
     if (!deletedRequest) {
       return res.json({
         success: false,
@@ -226,7 +203,8 @@ const deleteRequest = async (req, res) => {
     });
   }
 };
-const getSingleRequest = async (req, res) => {
+
+const getSingleRequestBB = async (req, res) => {
   const id = req.params.id;
 
   if (!id) {
@@ -237,7 +215,7 @@ const getSingleRequest = async (req, res) => {
   }
 
   try {
-    const singleRequest = await Request.findById(id).populate("userId");
+    const singleRequest = await RequestForBB.findById(id).populate("userId");
 
     if (!singleRequest) {
       return res.status(404).json({
@@ -276,13 +254,50 @@ const getSingleRequest = async (req, res) => {
   }
 };
 
-const updateShowRequest = async (req, res) => {
-  const { id, showRequest } = req.body;
+const getRequestsofUser = async (req, res) => {
+  const userId = req.params.id;
+
+  if (!userId) {
+    return res.json({
+      success: false,
+      message: "Invalid request ID",
+    });
+  }
+
+  await RequestForBB.find({ userId: userId })
+    .populate("bloodbank", "bbName")
+    .then((requests) => {
+      console.log(requests);
+      if (!requests) {
+        return res.status(404).json({
+          success: false,
+          message: "Request not found",
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "",
+        userReq: requests,
+      });
+    })
+    .catch((error) => {
+      console.log(error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error",
+        error: error.message,
+      });
+    });
+};
+
+const updateStatus = async (req, res) => {
+  const { id, isAccepted } = req.body;
 
   try {
-    const updatedRequest = await Request.findByIdAndUpdate(
+    const updatedRequest = await RequestForBB.findByIdAndUpdate(
       id,
-      { showRequest },
+      { isAccepted: isAccepted },
       { new: true }
     );
 
@@ -294,7 +309,7 @@ const updateShowRequest = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "showRequest updated successfully",
+      message: "Request updated successfully",
       data: updatedRequest,
     });
   } catch (error) {
@@ -305,10 +320,11 @@ const updateShowRequest = async (req, res) => {
   }
 };
 module.exports = {
-  addRequests,
-  getAllRequest,
-  updateRequest,
-  deleteRequest,
-  getSingleRequest,
-  updateShowRequest,
+  addRequestsBB,
+  getAllRequestBB,
+  updateRequestBB,
+  deleteRequestBB,
+  getRequestsofUser,
+  getSingleRequestBB,
+  updateStatus,
 };

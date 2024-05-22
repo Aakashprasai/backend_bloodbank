@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const RequestSchema = mongoose.Schema(
+const UserRequestSchema = mongoose.Schema(
   {
     patientName: {
       type: String,
@@ -74,18 +74,24 @@ const RequestSchema = mongoose.Schema(
       type: Number,
       required: true,
     },
-     showRequest: {
-      type: Boolean,
-      default: true,
-    },
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "user",
       required: true,
     },
+    bloodbank: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "user",
+      required: true,
+    },
+    isAccepted: {
+      type: Boolean,
+      required: true,
+      default: false,
+    },
   },
   { timestamps: true }
 );
 
-const RequestBlood = mongoose.model("requestblood", RequestSchema);
-module.exports = RequestBlood;
+const UserRequest = mongoose.model("UserRequest", UserRequestSchema);
+module.exports = UserRequest;
